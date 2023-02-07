@@ -205,6 +205,14 @@ Resources:
       UserPoolId: !Ref SimpleFileManagerUserPool
       GroupName: !Sub "${AWS::StackName}-Admins"
 
+  SimpleFileManagerUserGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: 'User group for Simple File Manager Users (Read Only)'
+      RoleArn: !GetAtt SimpleFileManagerUserRole.Arn
+      UserPoolId: !Ref SimpleFileManagerUserPool
+      GroupName: !Sub "${AWS::StackName}-Users"
+
   SimpleFileManagerAdminAccount:
     Type: AWS::Cognito::UserPoolUser
     Properties:
@@ -259,6 +267,44 @@ Resources:
       GroupName: !Ref SimpleFileManagerAdminGroup
       Username: !Ref AdminEmail
       UserPoolId: !Ref SimpleFileManagerUserPool
+
+  SimpleFileManagerUserRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref SimpleFileManagerIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName:  !Sub "${AWS::StackName}-UserPolicy"
+          PolicyDocument: !Sub
+            - |-
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Action": [
+                      "execute-api:Invoke"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": ["arn:aws:execute-api:${region}:${account}:${api}/*/GET/*"]
+                  }
+                ]
+              }
+            - {
+              region: !Ref "AWS::Region",
+              account: !Ref "AWS::AccountId",
+              api: !Ref ApiId,
+            }
 
 Outputs:
   AdminRoleArn:

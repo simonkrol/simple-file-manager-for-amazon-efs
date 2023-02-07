@@ -23,7 +23,7 @@
                 <b-col>
                 </b-col>
                 <b-col>
-                    <b-button v-b-modal.dir-modal variant="link" class="mb-2 dirBtn">
+                    <b-button v-if="postAccess" v-b-modal.dir-modal variant="link" class="mb-2 dirBtn">
                         Create directory
                     <b-icon icon="folder-plus" aria-hidden="true"></b-icon>
                     </b-button>
@@ -33,7 +33,7 @@
                 </b-col>
             </b-row>
             <b-breadcrumb v-on:click="navigateBack" :items="navObjects"></b-breadcrumb>
-            <b-table striped hover sort-by="Directory" sort-desc="true" :items="dirs">
+            <b-table striped hover sort-by="Directory" sort-desc :items="dirs">
                 <template v-slot:cell(Directory)="data">
                     <b-button @click='addDirectoryObject(data.value)' variant="link">{{ data.value }}</b-button>
                 </template>
@@ -47,7 +47,7 @@
                     <h3>Files</h3>
                 </b-col>
                 <b-col align-self="end">
-                    <b-button v-b-modal.upload-modal variant="link" class="mb-2 uploadBtn">
+                    <b-button v-if="postAccess" v-b-modal.upload-modal variant="link" class="mb-2 uploadBtn">
                         Upload file
                         <b-icon icon="box-arrow-up" aria-hidden="true"></b-icon>
                     </b-button>
@@ -71,12 +71,12 @@
                     </b-col>
                     <br> -->
                     <b-col>
-                        <b-link @click=deleteFile(data.value)>
+                        <b-link v-if="deleteAccess" @click=deleteFile(data.value)>
                             <b-icon icon="trash" variant="danger"></b-icon>
                         </b-link>
                     </b-col>
                     <b-col>
-                        <b-link @click=startDownload(data.value) v-b-modal.download-modal>
+                        <b-link v-if="getAccess" @click=startDownload(data.value) v-b-modal.download-modal>
                             <b-icon class="downloadIcon" icon="arrow-down" variant="primary"></b-icon>
                         </b-link>
                     </b-col>
@@ -95,6 +95,7 @@
 
 <script>
 import { API } from 'aws-amplify';
+import Vue from 'vue'
 import download from '../components/download.vue'
 import upload from '../components/upload.vue'
 import makedir from '../components/makedir.vue'
@@ -123,6 +124,17 @@ export default {
         showAlert: false,
         alertMessage: null,
         alertType: null
+    }
+  },
+  computed: {
+    getAccess() {
+        return Vue.prototype.$role.hasAccess("GET");
+    },
+    postAccess() {
+        return Vue.prototype.$role.hasAccess("POST");
+    },
+    deleteAccess() {
+        return Vue.prototype.$role.hasAccess("DELETE");
     }
   },
   mounted: function () {

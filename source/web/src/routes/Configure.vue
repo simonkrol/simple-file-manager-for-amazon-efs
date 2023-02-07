@@ -1,6 +1,6 @@
 <template>
   <div>
-    <b-container class="bv-example-row bv-example-row-flex-cols">
+    <b-container v-if="postAccess" class="bv-example-row bv-example-row-flex-cols">
         <h1>Filesystem: {{ $route.params.id }}</h1>
         
         <div v-if="processing">
@@ -56,6 +56,7 @@
 
 <script>
 import { API } from 'aws-amplify';
+import Vue from 'vue'
 
 export default {
   name: 'Configure',
@@ -69,9 +70,12 @@ export default {
     }
   },
   computed: {
-      valid() {
-          return this.uid != "" && this.gid != "" && this.path != "" && this.path.charAt(0) == '/'
-      }
+        valid() {
+            return this.uid != "" && this.gid != "" && this.path != "" && this.path.charAt(0) == '/'
+        },
+        postAccess() {
+            return Vue.prototype.$role.hasAccess("POST");
+        }
   },
   mounted: function () {
       this.getFilesystemNetinfo()

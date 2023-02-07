@@ -7,6 +7,8 @@ import Filesystem from '@/routes/Filesystem.vue'
 import Login from '@/routes/Login.vue'
 import Details from '@/routes/Details.vue'
 
+import ROLES from '@/common/roles'
+
 Vue.use(VueRouter);
 
 const router = new VueRouter({
@@ -50,7 +52,11 @@ const router = new VueRouter({
 router.beforeResolve(async (to, from, next) => {
   if (to.matched.some(record => record.meta.requiresAuth)) {
     try {
-      await Vue.prototype.$Amplify.Auth.currentAuthenticatedUser();
+      const authUser = await Vue.prototype.$Amplify.Auth.currentAuthenticatedUser();
+      const userRole = getRole(authUser.signInUserSession);
+      if (userRole) {
+        Vue.prototype.$role = userRole;
+      }
       next();
     } catch (e) {
       console.log(e);
@@ -66,5 +72,27 @@ router.beforeResolve(async (to, from, next) => {
     next();
   }
 });
+
+function getRole(userSession) {
+    let curRole = null;
+    try {
+        let priority = 0;
+        for (let group of userSession.accessToken.payload["cognito:groups"]) {
+            for (let key in ROLES) {
+                let role = ROLES[key];
+                if(group.match(role.regex)) {
+                    if(role.priority > priority) {
+                        curRole = role
+                        priority = role.priority;
+                    }
+                    break;
+                }
+            }
+        }
+    } catch (err) {
+        console.log(err);
+    }
+    return curRole;
+}
 
 export default router;

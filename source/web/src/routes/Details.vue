@@ -5,7 +5,7 @@
         <div v-if="processing">
             <b-spinner/>
         </div>
-        <div v-else>
+        <div v-else-if="postAccess">
             <p> Remove Simple File Manager Resources?</p>
             <b-button variant="danger" @click="deleteFileManager">Delete</b-button>
         </div>
@@ -15,12 +15,18 @@
 
 <script>
 import { API } from 'aws-amplify';
+import Vue from 'vue'
 
 export default {
   name: 'Details',
   data () {
     return {
         processing: false
+    }
+  },
+  computed: {
+    postAccess() {
+        return Vue.prototype.$role.hasAccess("POST");
     }
   },
   methods: {
