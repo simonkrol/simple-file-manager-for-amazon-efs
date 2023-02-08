@@ -7,8 +7,9 @@
           <p> Path: {{ path }}</p>
           <div v-if=urlLoaded>
             <b-form-file
-              v-model="fileToUpload"
-              :state="Boolean(fileToUpload)"
+              multiple
+              v-model="filesToUpload"
+              :state="Boolean(filesToUpload)"
               placeholder="Choose a file or drop it here..."
               drop-placeholder="Drop file here..."
             ></b-form-file>
@@ -17,7 +18,7 @@
             </div>
           </div>
           <div v-if="!uploading">
-            <b-button @click="checkIfFileExists()">Upload</b-button>
+            <b-button @click="uploadFiles()">Upload</b-button>
           </div>
     </b-col>
   </b-row>
@@ -60,16 +61,23 @@ export default {
   },
   methods: {
     afterComplete(status, message) {
-      let formattedResponse = {"type": "", "message": ""}
-      if (status == true) {
-        formattedResponse.type = "success"
-        formattedResponse.message = message
-        this.$emit('uploadCompleted', formattedResponse)
+      this.completions += 1;
+      console.log("afterComplete: " + status + " " + message);
+      if(!status) {
+        this.failures.push(message);
       }
-      else {
-        formattedResponse.type = "danger"
-        formattedResponse.message = message
-        this.$emit('uploadCompleted', formattedResponse)
+      if(this.completions == this.filesToUpload.length) {
+        let formattedResponse = {type: this.failures.length >= 1 ? "danger" : "success", message: "Upload completed successfully."};
+        if(this.failures.length >= 1)
+        {
+            formattedResponse.message = 
+                (this.completions - this.failures.length) + 
+                " file(s) completed successfully. " + 
+                this.failures.length + 
+                " file(s) did not complete successfully. Failures: [" + 
+                this.failures.join(", ") + "]";
+        }
+        this.$emit('uploadCompleted', formattedResponse);
       }
     },
     blobToBase64(blob) {
@@ -79,11 +87,11 @@ export default {
         reader.readAsDataURL(blob);
       });
     },
-    async deleteFile () {
+    async deleteFile (file) {
           let requestParams = { 
               queryStringParameters: {  
                 path: this.path,
-                name: this.fileToUpload.name
+                name: file.name
             }
           };
           try {
@@ -93,11 +101,11 @@ export default {
               console.log(error)
           }
     },
-    async uploadChunk(chunkData) {  
+    async uploadChunk(file, chunkData) {  
       let requestParams = { 
           queryStringParameters: {  
             path: this.path,
-            filename: this.fileToUpload.name
+            filename: file.name
           },
           headers: {
             "Content-Type": "application/json"
@@ -119,24 +127,31 @@ export default {
       }
       return chunkStatus
     },
-    checkIfFileExists () {
-      if (this.fileNames.indexOf(this.fileToUpload.name) > -1 ) {
-        console.log(this.fileToUpload.name, this.fileNames)
-        this.afterComplete(false, "File already exists.")
+    async uploadFiles() {
+        this.completions = 0;
+        this.failures = [];
+        for (let i = 0; i < this.filesToUpload.length; i++) {
+          this.checkIfFileExists(this.filesToUpload[i])
+        }
+    },
+    checkIfFileExists (file) {
+      if (this.fileNames.indexOf(file.name) > -1 ) {
+        console.log(file.name, this.fileNames)
+        this.afterComplete(false, file.name + " already exists.")
       }
       else {
-        this.upload(0, 0)
+        this.upload(file, 0, 0)
       }
     },
     // this whole function needs to be cleaned up, notably reduce duplicate code by breaking out into functions - works well for now though
-    async upload(chunkIndex, chunkOffset) {
+    async upload(file, chunkIndex, chunkOffset) {
       this.currentChunk = chunkIndex
       // first if block is for the first call to upload, e.g. when the button is clicked
       if (chunkIndex == 0 && chunkOffset == 0) {
         this.$emit('uploadStarted')
-        let fileSize = this.fileToUpload.size
+        let fileSize = file.size
         this.totalChunks = Math.ceil(fileSize / this.chunkSize)
-        let chunk = this.fileToUpload.slice(0, this.chunkSize + 1)
+        let chunk = file.slice(0, this.chunkSize + 1)
         let chunkData = {}
         this.uploading = true
 
@@ -147,11 +162,11 @@ export default {
         chunkData.dzchunkbyteoffset = 0
         chunkData.content = await this.blobToBase64(chunk)
         
-        let chunkStatus = await this.uploadChunk(chunkData)
+        let chunkStatus = await this.uploadChunk(file, chunkData)
         if (!chunkStatus) { //Check if not a 200 response code 
           // Delete partially uploaded file.
-          this.deleteFile()
-          this.afterComplete(false, "File was unable to be uploaded successfully. Check API logs.")
+          this.deleteFile(file)
+          this.afterComplete(false, file.name + " was unable to be uploaded successfully. Check API logs.")
         }
         else {
           if (this.totalChunks == 1 || this.totalChunks < 1) {
@@ -161,7 +176,7 @@ export default {
           else {
             let nextChunkIndex = 1
             let nextChunkOffset = this.chunkSize + 1
-            this.upload(nextChunkIndex, nextChunkOffset)
+            this.upload(file, nextChunkIndex, nextChunkOffset)
           }
         }
       }
@@ -169,8 +184,8 @@ export default {
       else {
         // check to see if the current chunk is equal to total chunks, if so we send the last bytes and return complete
         if (chunkIndex == this.totalChunks - 1) {
-          let fileSize = this.fileToUpload.size
-          let chunk = this.fileToUpload.slice(chunkOffset)
+          let fileSize = file.size
+          let chunk = file.slice(chunkOffset)
           let chunkData = {}
         
           chunkData.dzchunkindex = chunkIndex
@@ -180,13 +195,13 @@ export default {
           chunkData.dzchunkbyteoffset = chunkOffset
           chunkData.content = await this.blobToBase64(chunk)
           
-          let chunkStatus = await this.uploadChunk(chunkData)
+          let chunkStatus = await this.uploadChunk(file, chunkData)
           
           
           if (!chunkStatus) { //Check if not a 200 response code 
             // Delete partially uploaded file.
-            this.deleteFile()
-            this.afterComplete(false, "File was unable to be uploaded successfully. Check API logs.")
+            this.deleteFile(file)
+            this.afterComplete(false, file.name + " was unable to be uploaded successfully. Check API logs.")
           }
           else {
             this.uploading = false
@@ -195,9 +210,9 @@ export default {
         }
         // in this case there are chunks remaining, so we continue to upload chunks
         else {
-          let fileSize = this.fileToUpload.size
+          let fileSize = file.size
           let end = Math.min(chunkOffset + this.chunkSize, fileSize)
-          let chunk = this.fileToUpload.slice(chunkOffset, end)
+          let chunk = file.slice(chunkOffset, end)
           let chunkData = {}
         
           chunkData.dzchunkindex = chunkIndex
@@ -207,17 +222,17 @@ export default {
           chunkData.dzchunkbyteoffset = chunkOffset
           chunkData.content = await this.blobToBase64(chunk)
           
-          let chunkStatus = await this.uploadChunk(chunkData)
+          let chunkStatus = await this.uploadChunk(file, chunkData)
           
           if (!chunkStatus) { //Check if not a 200 response code 
             // Delete partially uploaded file.
-            this.deleteFile()
-            this.afterComplete(false, "File was unable to be uploaded successfully. Check API logs.")
+            this.deleteFile(file)
+            this.afterComplete(false, file.name + " was unable to be uploaded successfully. Check API logs.")
           }
           else {
             let nextChunkIndex = chunkIndex + 1
             let nextChunkOffset = end
-            this.upload(nextChunkIndex, nextChunkOffset)
+            this.upload(file, nextChunkIndex, nextChunkOffset)
           }
         }
       }
